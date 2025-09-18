@@ -17,32 +17,41 @@ interface QueueStatus {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-
+  const [token, setToken] = useState<string | null>(null);
   const [me, setMe] = useState<Student | null>(null);
   const [status, setStatus] = useState<QueueStatus | null>(null);
   const [msg, setMsg] = useState<string>("");
 
-  // Redirect if no token
+  const API_URL =
+    process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"; // use ngrok in .env
+
+  // Get token safely after mount
   useEffect(() => {
-    if (!token) {
-      router.push("/");
-      return;
+    if (typeof window !== "undefined") {
+      const t = localStorage.getItem("token");
+      if (!t) {
+        router.push("/");
+        return;
+      }
+      setToken(t);
     }
+  }, [router]);
+
+  // Fetch user info + status
+  useEffect(() => {
+    if (!token) return;
 
     async function fetchData() {
       try {
-        // Fetch user info
-        
-        const meRes = await fetch("http://localhost:8000/students/me", {
+        const meRes = await fetch(`${API_URL}/students/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!meRes.ok) throw new Error("Failed to fetch user data");
+
         const meData = await meRes.json();
         setMe(meData);
 
-        // Fetch queue status
-        await fetchStatus();
+        await fetchStatus(token);
       } catch (err) {
         console.error(err);
         localStorage.removeItem("token");
@@ -51,15 +60,18 @@ export default function DashboardPage() {
     }
 
     fetchData();
-  }, [token, router]);
+  }, [token, API_URL, router]);
 
-  async function fetchStatus() {
-    if (!token) return;
+  async function fetchStatus(tok?: string| null) {
+    const authToken = tok || token;
+    if (!authToken) return;
+
     try {
-      const res = await fetch("http://localhost:8000/queue/status", {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(`${API_URL}/queue/status`, {
+        headers: { Authorization: `Bearer ${authToken}` },
       });
       if (!res.ok) throw new Error("Failed to fetch queue status");
+
       const data = await res.json();
       setStatus(data);
     } catch (err) {
@@ -72,10 +84,11 @@ export default function DashboardPage() {
     if (!token) return;
     setMsg("Submitting...");
     try {
-      const res = await fetch("http://localhost:8000/queue/enter", {
+      const res = await fetch(`${API_URL}/queue/enter`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
+
       const body = await res.json();
       if (!res.ok) setMsg(body.detail || JSON.stringify(body));
       else {
@@ -88,8 +101,10 @@ export default function DashboardPage() {
     }
   }
 
+  // Auto-refresh status every 5s
   useEffect(() => {
-    const interval = setInterval(fetchStatus, 5000);
+    if (!token) return;
+    const interval = setInterval(() => fetchStatus(), 5000);
     return () => clearInterval(interval);
   }, [token]);
 
@@ -100,7 +115,14 @@ export default function DashboardPage() {
       <h1 style={{ fontSize: 22 }}>Student Dashboard</h1>
 
       {me && (
-        <div style={{ marginTop: 10, padding: 12, border: "1px solid #ccc", borderRadius: 8 }}>
+        <div
+          style={{
+            marginTop: 10,
+            padding: 12,
+            border: "1px solid #ccc",
+            borderRadius: 8,
+          }}
+        >
           <strong>{me.name}</strong> — {me.occupation} <br />
           Priority: <strong>{me.priority}</strong>
           {me.description && <p style={{ marginTop: 8 }}>{me.description}</p>}
@@ -127,11 +149,18 @@ export default function DashboardPage() {
 
       <div style={{ marginTop: 16 }}>
         <h3>Status</h3>
-        <pre style={{ background: "#f5f5f5", padding: 10, borderRadius: 6 }}>
+        <pre
+          style={{
+            background: "#f5f5f5",
+            padding: 10,
+            borderRadius: 6,
+            whiteSpace: "pre-wrap",
+          }}
+        >
           {status ? JSON.stringify(status, null, 2) : "No status yet"}
         </pre>
         <button
-          onClick={fetchStatus}
+          onClick={() => fetchStatus()}
           style={{ marginTop: 8, padding: 8, borderRadius: 4, cursor: "pointer" }}
         >
           Refresh Status

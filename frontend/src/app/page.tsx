@@ -9,38 +9,49 @@ export default function LoginPage() {
   const [msg, setMsg] = useState("");
   const router = useRouter();
 
+  const API_URL =
+    process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"; // fallback for dev
+
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setMsg("Logging in...");
 
     try {
-      const res = await fetch("http://localhost:8000/auth/login", {
+      const res = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        setMsg(err.detail || "Login failed");
+        let errMsg = "Login failed";
+        try {
+          const err = await res.json();
+          errMsg = err.detail || errMsg;
+        } catch {
+          /* ignore parsing errors */
+        }
+        setMsg(errMsg);
         return;
       }
 
       const data = await res.json();
 
-      // Save token and admin status in localStorage
-      localStorage.setItem("token", data.access_token);
-      localStorage.setItem("is_admin", JSON.stringify(data.is_admin));
+      // Save token + admin flag (safe for client)
+      if (typeof window !== "undefined") {
+        localStorage.setItem("token", data.access_token);
+        localStorage.setItem("is_admin", JSON.stringify(data.is_admin));
+      }
 
       setMsg("Login successful! Redirecting...");
 
-      // Redirect based on role
+      // Redirect after token is saved
       setTimeout(() => {
         if (data.is_admin) router.push("/admin");
         else router.push("/dashboard");
-      }, 50);
+      }, 100);
     } catch (err) {
-      console.error(err);
+      console.error("Login error:", err);
       setMsg("Network error. Please try again.");
     }
   }
@@ -68,15 +79,24 @@ export default function LoginPage() {
         <br />
         <button
           type="submit"
-          style={{ padding: 10, width: "100%", marginTop: 16 }}
+          style={{
+            padding: 10,
+            width: "100%",
+            marginTop: 16,
+            background: "#0070f3",
+            color: "white",
+            border: "none",
+            borderRadius: 6,
+            cursor: "pointer",
+          }}
         >
           Login
         </button>
       </form>
       <p style={{ marginTop: 12, color: "gray" }}>{msg}</p>
       <p style={{ marginTop: 16, fontSize: 12, color: "gray" }}>
-        Students and Admin use the same login endpoint. Admin accounts have
-        is_admin=true.
+        Students and Admin use the same login endpoint. Admin accounts have{" "}
+        <code>is_admin=true</code>.
       </p>
     </main>
   );

@@ -1,5 +1,7 @@
 "use client";
+
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 interface QueueResult {
   position?: number;
@@ -10,54 +12,91 @@ interface QueueResult {
 export default function AdminPage() {
   const [capacity, setCapacity] = useState<string>("");
   const [results, setResults] = useState<QueueResult[]>([]);
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const [token, setToken] = useState<string | null>(null);
+  const router = useRouter();
+
+  const API_URL =
+    process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"; // fallback for dev
 
   useEffect(() => {
-    if (!token || localStorage.getItem("is_admin") !== "true") {
-      window.location.href = "/";
-      return;
+    if (typeof window !== "undefined") {
+      const t = localStorage.getItem("token");
+      const isAdmin = localStorage.getItem("is_admin") === "true";
+
+      if (!t || !isAdmin) {
+        router.push("/");
+        return;
+      }
+
+      setToken(t);
+      fetchResults(t);
     }
-    fetchResults();
-  }, []);
+  }, [router]);
 
   async function setCap(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    await fetch("http://localhost:8000/admin/set_capacity", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ capacity: Number(capacity) }),
-    });
-    alert("Capacity set. You can now process the queue.");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_URL}/admin/set_capacity`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ capacity: Number(capacity) }),
+      });
+
+      if (!res.ok) throw new Error("Failed to set capacity");
+
+      alert("Capacity set. You can now process the queue.");
+    } catch (err) {
+      console.error(err);
+      alert("Error setting capacity");
+    }
   }
 
   async function processQueue() {
-    const res = await fetch("http://localhost:8000/admin/process", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const body = await res.json();
-    if (!res.ok) {
-      alert("Error processing queue");
-      return;
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_URL}/admin/process`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const body = await res.json();
+      if (!res.ok) {
+        alert("Error processing queue");
+        return;
+      }
+
+      setResults([...body.accepted, ...body.rejected]);
+    } catch (err) {
+      console.error(err);
+      alert("Network error while processing queue");
     }
-    setResults([...body.accepted, ...body.rejected]);
   }
 
-  async function fetchResults() {
-    const res = await fetch("http://localhost:8000/admin/results", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (res.ok) {
-      setResults(await res.json());
+  async function fetchResults(tok?: string) {
+    const authToken = tok || token;
+    if (!authToken) return;
+
+    try {
+      const res = await fetch(`${API_URL}/admin/results`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+
+      if (res.ok) {
+        setResults(await res.json());
+      }
+    } catch (err) {
+      console.error(err);
     }
   }
 
   return (
-    <main>
+    <main style={{ padding: 20 }}>
       <h1 style={{ fontSize: 22 }}>Admin Dashboard</h1>
 
       <section style={{ marginTop: 12 }}>
@@ -78,7 +117,7 @@ export default function AdminPage() {
             Process Queue Now
           </button>
           <button
-            onClick={fetchResults}
+            onClick={() => fetchResults()}
             style={{ padding: 10, marginLeft: 8 }}
           >
             Refresh Results
