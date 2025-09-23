@@ -1,15 +1,19 @@
-export const metadata = { title: "Apocalypse Bunker Queue" };
+import "./globals.css";
+
+export const metadata = {
+  title: "Apocalypse Bunker Queue",
+  description: "Survive if you can...",
+};
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html>
-      <head />
-      <body style={{ fontFamily: "system-ui, sans-serif", padding: 12 }}>
-        <div style={{ maxWidth: 760, margin: "0 auto" }}>{children}</div>
+    <html lang="en">
+      <body className="min-h-screen bg-bunker-bg text-gray-200 flex justify-center">
+        <div className="w-full max-w-md p-4">{children}</div>
       </body>
     </html>
   );
