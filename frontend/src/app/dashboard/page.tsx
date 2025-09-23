@@ -1,58 +1,54 @@
 "use client";
 import { useEffect, useState } from "react";
 
-type Me = {
-  name: string;
-  occupation: string;
-  description: string;
-  priority: number;
-};
-
-type Status = {
-  status: "accepted" | "rejected" | "pending";
-  position?: number;
-  message: string;
-};
+type Me = { name: string; occupation: string; description: string; priority: number };
+type Status = { status: "accepted" | "rejected" | "pending"; position?: number; message: string };
 
 export default function DashboardPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
   const [msg, setMsg] = useState("");
+  const [hasMounted, setHasMounted] = useState(false);
 
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
   useEffect(() => {
-    fetch("http://localhost:8000/students/me", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.json())
-      .then((data: Me) => setMe(data));
+    setHasMounted(true);
+    const token = localStorage.getItem("token");
+    if (!token) return;
 
-    fetchStatus();
+    fetch(`${API_URL}/students/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then(setMe);
+
+    fetchStatus(token);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function fetchStatus() {
-    fetch("http://localhost:8000/queue/status", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+  function fetchStatus(token: string) {
+    fetch(`${API_URL}/queue/status`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
-      .then((data: Status) => setStatus(data));
+      .then(setStatus);
   }
 
   async function enterQueue() {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
     setMsg("Submitting...");
-    const res = await fetch("http://localhost:8000/queue/enter", {
+    const res = await fetch(`${API_URL}/queue/enter`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
     });
     const body = await res.json();
     setMsg(body.message || body.detail);
-    setTimeout(fetchStatus, 1000);
+    setTimeout(() => fetchStatus(token), 1000);
   }
 
+  if (!hasMounted) return null;
+
   return (
-    <main className="flex flex-col gap-6">
+    <main className="flex flex-col gap-6 px-4">
       <h1 className="text-2xl font-bold text-bunker-glow">Survivor Dashboard</h1>
 
       {me && (
@@ -87,9 +83,7 @@ export default function DashboardPage() {
           >
             {status.message}
           </p>
-          {status.position && (
-            <p className="text-sm mt-1">Position: {status.position}</p>
-          )}
+          {status.position && <p className="text-sm mt-1">Position: {status.position}</p>}
         </div>
       )}
 

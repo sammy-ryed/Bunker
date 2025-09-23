@@ -1,36 +1,33 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-interface QueueResult {
-  position?: number;
-  name: string;
-  accepted: boolean;
-}
+type QueueResult = { position?: number; name: string; accepted: boolean };
 
 export default function AdminPage() {
   const [capacity, setCapacity] = useState<string>("");
   const [results, setResults] = useState<QueueResult[]>([]);
   const [token, setToken] = useState<string | null>(null);
+  const [hasMounted, setHasMounted] = useState(false);
   const router = useRouter();
 
-  const API_URL =
-    process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"; // fallback for dev
+  const API_URL = process.env.NEXT_PUBLIC_API_URL ;
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const t = localStorage.getItem("token");
-      const isAdmin = localStorage.getItem("is_admin") === "true";
+    setHasMounted(true);
+    if (typeof window === "undefined") return;
 
-      if (!t || !isAdmin) {
-        router.push("/");
-        return;
-      }
+    const t = localStorage.getItem("token");
+    const isAdmin = localStorage.getItem("is_admin") === "true";
 
-      setToken(t);
-      fetchResults(t);
+    if (!t || !isAdmin) {
+      router.push("/");
+      return;
     }
+
+    setToken(t);
+    fetchResults(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   async function setCap(e: React.FormEvent<HTMLFormElement>) {
@@ -40,40 +37,28 @@ export default function AdminPage() {
     try {
       const res = await fetch(`${API_URL}/admin/set_capacity`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ capacity: Number(capacity) }),
       });
 
       if (!res.ok) throw new Error("Failed to set capacity");
-
       alert("Capacity set. You can now process the queue.");
-    } catch (err) {
-      console.error(err);
+    } catch {
       alert("Error setting capacity");
     }
   }
 
   async function processQueue() {
     if (!token) return;
-
     try {
       const res = await fetch(`${API_URL}/admin/process`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
-
       const body = await res.json();
-      if (!res.ok) {
-        alert("Error processing queue");
-        return;
-      }
-
-      setResults([...body.accepted, ...body.rejected]);
-    } catch (err) {
-      console.error(err);
+      if (!res.ok) alert("Error processing queue");
+      else setResults([...body.accepted, ...body.rejected]);
+    } catch {
       alert("Network error while processing queue");
     }
   }
@@ -86,14 +71,11 @@ export default function AdminPage() {
       const res = await fetch(`${API_URL}/admin/results`, {
         headers: { Authorization: `Bearer ${authToken}` },
       });
-
-      if (res.ok) {
-        setResults(await res.json());
-      }
-    } catch (err) {
-      console.error(err);
-    }
+      if (res.ok) setResults(await res.json());
+    } catch {}
   }
+
+  if (!hasMounted) return null;
 
   return (
     <main style={{ padding: 20 }}>
@@ -116,10 +98,7 @@ export default function AdminPage() {
           <button onClick={processQueue} style={{ padding: 10 }}>
             Process Queue Now
           </button>
-          <button
-            onClick={() => fetchResults()}
-            style={{ padding: 10, marginLeft: 8 }}
-          >
+          <button onClick={() => fetchResults()} style={{ padding: 10, marginLeft: 8 }}>
             Refresh Results
           </button>
         </div>
