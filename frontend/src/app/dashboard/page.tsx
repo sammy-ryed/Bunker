@@ -1,173 +1,99 @@
 "use client";
-
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 
-interface Student {
+type Me = {
   name: string;
   occupation: string;
+  description: string;
   priority: number;
-  description?: string;
-}
+};
 
-interface QueueStatus {
-  status: string;
-  message?: string;
-}
+type Status = {
+  status: "accepted" | "rejected" | "pending";
+  position?: number;
+  message: string;
+};
 
 export default function DashboardPage() {
-  const router = useRouter();
-  const [token, setToken] = useState<string | null>(null);
-  const [me, setMe] = useState<Student | null>(null);
-  const [status, setStatus] = useState<QueueStatus | null>(null);
-  const [msg, setMsg] = useState<string>("");
+  const [me, setMe] = useState<Me | null>(null);
+  const [status, setStatus] = useState<Status | null>(null);
+  const [msg, setMsg] = useState("");
 
-  const API_URL =
-    process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"; // use ngrok in .env
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
-  // Get token safely after mount
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const t = localStorage.getItem("token");
-      if (!t) {
-        router.push("/");
-        return;
-      }
-      setToken(t);
-    }
-  }, [router]);
+    fetch("http://localhost:8000/students/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((data: Me) => setMe(data));
 
-  // Fetch user info + status
-  useEffect(() => {
-    if (!token) return;
+    fetchStatus();
+  }, []);
 
-    async function fetchData() {
-      try {
-        const meRes = await fetch(`${API_URL}/students/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!meRes.ok) throw new Error("Failed to fetch user data");
-
-        const meData = await meRes.json();
-        setMe(meData);
-
-        await fetchStatus(token);
-      } catch (err) {
-        console.error(err);
-        localStorage.removeItem("token");
-        router.push("/");
-      }
-    }
-
-    fetchData();
-  }, [token, API_URL, router]);
-
-  async function fetchStatus(tok?: string| null) {
-    const authToken = tok || token;
-    if (!authToken) return;
-
-    try {
-      const res = await fetch(`${API_URL}/queue/status`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      if (!res.ok) throw new Error("Failed to fetch queue status");
-
-      const data = await res.json();
-      setStatus(data);
-    } catch (err) {
-      console.error(err);
-      setStatus({ status: "unknown", message: "Network error" });
-    }
+  function fetchStatus() {
+    fetch("http://localhost:8000/queue/status", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((data: Status) => setStatus(data));
   }
 
   async function enterQueue() {
-    if (!token) return;
     setMsg("Submitting...");
-    try {
-      const res = await fetch(`${API_URL}/queue/enter`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      const body = await res.json();
-      if (!res.ok) setMsg(body.detail || JSON.stringify(body));
-      else {
-        setMsg(body.message);
-        await fetchStatus();
-      }
-    } catch (err) {
-      console.error(err);
-      setMsg("Network error");
-    }
+    const res = await fetch("http://localhost:8000/queue/enter", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const body = await res.json();
+    setMsg(body.message || body.detail);
+    setTimeout(fetchStatus, 1000);
   }
 
-  // Auto-refresh status every 5s
-  useEffect(() => {
-    if (!token) return;
-    const interval = setInterval(() => fetchStatus(), 5000);
-    return () => clearInterval(interval);
-  }, [token]);
-
-  if (!token) return <p>Loading...</p>;
-
   return (
-    <main style={{ padding: 20 }}>
-      <h1 style={{ fontSize: 22 }}>Student Dashboard</h1>
+    <main className="flex flex-col gap-6">
+      <h1 className="text-2xl font-bold text-bunker-glow">Survivor Dashboard</h1>
 
       {me && (
-        <div
-          style={{
-            marginTop: 10,
-            padding: 12,
-            border: "1px solid #ccc",
-            borderRadius: 8,
-          }}
-        >
-          <strong>{me.name}</strong> — {me.occupation} <br />
-          Priority: <strong>{me.priority}</strong>
-          {me.description && <p style={{ marginTop: 8 }}>{me.description}</p>}
+        <div className="bg-bunker-card p-4 rounded-xl">
+          <h2 className="text-xl font-semibold">{me.name}</h2>
+          <p className="text-sm text-gray-400">{me.occupation}</p>
+          <p className="mt-2">{me.description}</p>
+          <p className="text-sm mt-2">
+            Priority: <span className="font-bold">{me.priority}</span>
+          </p>
         </div>
       )}
 
-      <div style={{ marginTop: 16 }}>
-        <button
-          onClick={enterQueue}
-          style={{
-            padding: 12,
-            width: "100%",
-            fontSize: 16,
-            backgroundColor: "#0070f3",
-            color: "white",
-            border: "none",
-            borderRadius: 6,
-            cursor: "pointer",
-          }}
-        >
-          Enter the Queue to Save Yourself
-        </button>
-      </div>
+      <button
+        onClick={enterQueue}
+        className="bg-bunker-accent hover:bg-bunker-glow transition p-4 rounded-xl font-bold"
+      >
+        Enter the Queue to Save Yourself
+      </button>
 
-      <div style={{ marginTop: 16 }}>
-        <h3>Status</h3>
-        <pre
-          style={{
-            background: "#f5f5f5",
-            padding: 10,
-            borderRadius: 6,
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          {status ? JSON.stringify(status, null, 2) : "No status yet"}
-        </pre>
-        <button
-          onClick={() => fetchStatus()}
-          style={{ marginTop: 8, padding: 8, borderRadius: 4, cursor: "pointer" }}
-        >
-          Refresh Status
-        </button>
-      </div>
+      {status && (
+        <div className="bg-bunker-card p-4 rounded-xl">
+          <h3 className="font-semibold">Status</h3>
+          <p
+            className={`mt-2 text-lg ${
+              status.status === "accepted"
+                ? "text-green-400"
+                : status.status === "rejected"
+                ? "text-red-400"
+                : "text-gray-400"
+            }`}
+          >
+            {status.message}
+          </p>
+          {status.position && (
+            <p className="text-sm mt-1">Position: {status.position}</p>
+          )}
+        </div>
+      )}
 
-      {msg && <p style={{ color: "gray", marginTop: 16 }}>{msg}</p>}
+      {msg && <p className="text-gray-400 text-sm">{msg}</p>}
     </main>
   );
 }
